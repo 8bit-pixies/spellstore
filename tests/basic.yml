@@ -1,0 +1,15 @@
+---
+kind: entity
+name: user
+value_type: str
+    
+---
+kind: group
+name: feature_group
+entity: user
+features:
+  - name: a
+    value_type: int
+  - name: b
+    value_type: float
+
