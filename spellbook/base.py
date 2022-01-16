@@ -3,14 +3,11 @@ Handles and parses the metadata files
 """
 
 from datetime import datetime
-from enum import Enum
-from multiprocessing.sharedctypes import Value
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, validator
 from tabulate import tabulate
-from yaml.parser import ParserError
 
 
 class Entity(BaseModel):
@@ -77,7 +74,7 @@ class RepoConfig(BaseModel):
             elif meta_obj["kind"] == "group":
                 meta_list.append(Group.parse_obj(meta_obj))
             else:
-                raise ParserError("Unable to parse Configuration...")
+                raise Exception("Unable to parse Configuration...")
         return cls.parse_list(meta_list)
 
     @classmethod
@@ -89,20 +86,17 @@ class RepoConfig(BaseModel):
         for g in self.groups:
             if g.name == group_name:
                 return getattr(g, attr_name)
-        raise ValueError(f"Group name: {name}, not found in Repo Configuration!")
+        raise ValueError(f"Group name: {group_name}, not found in Repo Configuration!")
 
     def print_entity(self):
         headers = ["name", "value-type", "description"]
         table = [[e.name, str(e.value_type), e.description] for e in self.entities]
-        return tabulate(table, headers, tablefmt="github")
+        return tabulate(table, headers, tablefmt="pipe")
 
     def print_group(self):
-        headers = ["name", "entity", "description", "event_timestamp", "created_timestamp"]
-        table = [
-            [g.name, str(g.entity), g.description, g.event_timestamp_column, g.created_timestamp_column]
-            for g in self.groups
-        ]
-        return tabulate(table, headers, tablefmt="github")
+        headers = ["name", "entity", "description", "event_timestamp"]
+        table = [[g.name, str(g.entity), g.description, g.event_timestamp_column] for g in self.groups]
+        return tabulate(table, headers, tablefmt="pipe")
 
     def print_feature(self):
         headers = ["name", "group", "entity", "value-type", "description"]
@@ -110,7 +104,7 @@ class RepoConfig(BaseModel):
         for g in self.groups:
             for f in g.features:
                 table.append([f.name, g.name, str(g.entity), str(f.value_type), f.description])
-        return tabulate(table, headers, tablefmt="github")
+        return tabulate(table, headers, tablefmt="pipe")
 
     def print_meta(self, subset: Optional[Literal["group", "feature", "entity"]] = None):
         if subset is None:

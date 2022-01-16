@@ -5,11 +5,25 @@ value_type: str
     
 ---
 kind: group
-name: feature_group
+name: test1
 entity: user
 features:
   - name: a
     value_type: int
   - name: b
     value_type: float
+  - name: c
+    value_type : str
 
+
+---
+kind: group
+name: test2
+entity: user
+features:
+  - name: a
+    value_type: int
+  - name: d
+    value_type: float
+  - name: e
+    value_type : str

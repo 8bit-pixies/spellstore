@@ -38,8 +38,7 @@ def test_parse_yaml_simple():
 kind: entity
 name: user
 value_type: str
-    
-    
+
 """
     print(RepoConfig.parse_yaml(sample_yaml))
     assert RepoConfig.parse_yaml(sample_yaml) == RepoConfig(entities=[Entity(name="user", value_type="str")], groups=[])

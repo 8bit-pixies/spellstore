@@ -37,8 +37,8 @@ Python API: TBC, should mirror CLI usage
 - [x] `spellbook get meta entity`
 - [x] `spellbook get meta feature`
 - [x] `spellbook get meta group`
-- [ ] `spellbook export`
-- [ ] `spellbook join`
+- [ ] `spellbook export`  - propose to remove as it requires an implicit knowledge of the database connections?
+- [ ] `spellbook join`  - propose to remove as it requires an implicit knowledge of the database connections?
 - [ ] `spellbook import`
 
 # Architecture

@@ -3,7 +3,7 @@ from typing import Optional
 
 import typer
 
-from spellbook import cli_export, cli_get
+from spellbook import cli_get
 
 app = typer.Typer()
 app.add_typer(cli_get.app, name="get")
