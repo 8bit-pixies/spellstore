@@ -44,6 +44,9 @@ class Group(BaseModel):
     features: List[Feature]
     description: Optional[str]
     event_timestamp_column: Optional[str]  # if not available, just just assume the feature group has no timestamp
+    create_timestamp_column: Optional[
+        str
+    ]  # if not available, just just assume the feature group has no create timestamp
     kind: str = "group"
 
 

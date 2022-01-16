@@ -8,7 +8,7 @@ from typing import List, Optional
 
 import pandas as pd
 from pydantic import BaseModel
-from sqlalchemy import column, func, or_, table
+from sqlalchemy import and_, column, func, or_, table
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
@@ -88,6 +88,7 @@ class FeatureView(BaseModel):
     columns: List[str]
     entity_column: str = ""
     event_timestamp_column: Optional[str] = None
+    create_timestamp_column: Optional[str] = None
     rank_column: Optional[str] = None
 
     def build_subquery(self, engine):
@@ -95,6 +96,7 @@ class FeatureView(BaseModel):
         columns = self.columns.copy()
         if self.entity_column not in columns:
             columns.append(self.entity_column)
+
         if self.event_timestamp_column is None:
             self.columns = columns
             self.rank_column = None
@@ -102,17 +104,34 @@ class FeatureView(BaseModel):
         else:
             if self.event_timestamp_column not in columns:
                 columns.append(self.event_timestamp_column)
+            if self.create_timestamp_column not in columns and self.create_timestamp_column is not None:
+                columns.append(self.create_timestamp_column)
+
             rank_col = "rnk"
             while rank_col in columns:
                 rank_col = "r" + rank_col
             self.columns = columns
             self.rank_column = rank_col
-            return db.query(
-                table(self.name, *[column(col) for col in self.columns]),
-                func.rank()
-                .over(order_by=column(self.event_timestamp_column).desc(), partition_by=self.entity_column)
-                .label(rank_col),
-            ).subquery()
+
+            if self.create_timestamp_column is None:
+                return db.query(
+                    table(self.name, *[column(col) for col in self.columns]),
+                    func.rank()
+                    .over(order_by=column(self.event_timestamp_column).desc(), partition_by=self.entity_column)
+                    .label(rank_col),
+                ).subquery()
+            else:
+                return db.query(
+                    table(self.name, *[column(col) for col in self.columns]),
+                    func.rank()
+                    .over(
+                        order_by=and_(
+                            column(self.event_timestamp_column).desc(), column(self.create_timestamp_column).desc()
+                        ),
+                        partition_by=self.entity_column,
+                    )
+                    .label(rank_col),
+                ).subquery()
 
 
 class FeatureGroup(BaseModel):
