@@ -20,24 +20,24 @@ app.add_typer(meta_app, name="meta")
 
 
 @meta_app.command()
-def all(config: str = ""):
-    metadata = MetaData.parse_yaml_file(config)
+def all(metadata: str = ""):
+    metadata = MetaData.parse_yaml_file(metadata)
     typer.echo(metadata.print_meta())
 
 
 @meta_app.command()
-def entity(config: str = ""):
-    metadata = MetaData.parse_yaml_file(config)
+def entity(metadata: str = ""):
+    metadata = MetaData.parse_yaml_file(metadata)
     typer.echo(metadata.print_entity())
 
 
 @meta_app.command()
-def feature(config: str = ""):
-    metadata = MetaData.parse_yaml_file(config)
+def feature(metadata: str = ""):
+    metadata = MetaData.parse_yaml_file(metadata)
     typer.echo(metadata.print_feature())
 
 
 @meta_app.command()
-def group(config: str = ""):
-    metadata = MetaData.parse_yaml_file(config)
+def group(metadata: str = ""):
+    metadata = MetaData.parse_yaml_file(metadata)
     typer.echo(metadata.print_group())

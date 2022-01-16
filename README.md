@@ -15,11 +15,12 @@ Goals:
 TBC - this is proposed CLI design
 
 ```console
+$ spellbook get meta all --metadata metadata.yml
 $ spellbook get meta entity --metadata metadata.yml
 $ spellbook get meta feature --metadata metadata.yml
 $ spellbook get meta group --metadata metadata.yml
-$ spellbook join --feature <list of features> --input-file <(optional) labels.csv> --start-date <(optional)> --end-date <(optional)> --output <(optional)>
-$ spellbook export --feature <list of features> --latest <(optional)> --start-date --end-date
+$ spellbook export --feature <list of features> --snapshot-date <date/datetime> --output <(optional)>
+$ spellbook join --feature <list of features> --input-file <labels.csv> --output <(optional)>
 ```
 
 Convenience utilities - this is a wrapper around `pandas` to write to the underlying database, but not needed. It is provided so that the user never needs to leave CLI.
@@ -29,6 +30,16 @@ $ spellbook import --group <feature group> --input-file <input file.csv>
 ```
 
 Python API: TBC, should mirror CLI usage
+
+## CLI Coverage
+
+- [x] `spellbook get meta all`
+- [x] `spellbook get meta entity`
+- [x] `spellbook get meta feature`
+- [x] `spellbook get meta group`
+- [ ] `spellbook export`
+- [ ] `spellbook join`
+- [ ] `spellbook import`
 
 # Architecture
 

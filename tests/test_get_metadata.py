@@ -1,4 +1,4 @@
-from spellbook.metadata import Entity, Feature, Group, MetaData
+from spellbook.base import Entity, Feature, Group, RepoConfig
 
 
 def test_metadata_read():
@@ -14,7 +14,7 @@ def test_metadata_read():
             ],
         ),
     ]
-    base_meta = MetaData(
+    base_meta = RepoConfig(
         entities=[Entity(name="user", value_type=str)],
         groups=[
             Group(
@@ -29,7 +29,7 @@ def test_metadata_read():
         ],
     )
 
-    assert base_meta == MetaData.parse_list(metadata_list)
+    assert base_meta == RepoConfig.parse_list(metadata_list)
 
 
 def test_parse_yaml_simple():
@@ -41,5 +41,5 @@ value_type: str
     
     
 """
-    print(MetaData.parse_yaml(sample_yaml))
-    assert MetaData.parse_yaml(sample_yaml) == MetaData(entities=[Entity(name="user", value_type="str")], groups=[])
+    print(RepoConfig.parse_yaml(sample_yaml))
+    assert RepoConfig.parse_yaml(sample_yaml) == RepoConfig(entities=[Entity(name="user", value_type="str")], groups=[])

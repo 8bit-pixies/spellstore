@@ -4,6 +4,7 @@ Handles and parses the metadata files
 
 from datetime import datetime
 from enum import Enum
+from multiprocessing.sharedctypes import Value
 from typing import List, Literal, Optional, Union
 
 import yaml
@@ -46,11 +47,10 @@ class Group(BaseModel):
     features: List[Feature]
     description: Optional[str]
     event_timestamp_column: Optional[str]  # if not available, just just assume the feature group has no timestamp
-    created_timestamp_column: Optional[str]  # if available, will order by created_timestamp
     kind: str = "group"
 
 
-class MetaData(BaseModel):
+class RepoConfig(BaseModel):
     entities: List[Entity]
     groups: List[Group]
 
@@ -84,6 +84,12 @@ class MetaData(BaseModel):
     def parse_yaml_file(cls, config_file):
         config = open(config_file, "r").read()
         return cls.parse_yaml(config)
+
+    def get_attr_from_group_name(self, group_name, attr_name):
+        for g in self.groups:
+            if g.name == group_name:
+                return getattr(g, attr_name)
+        raise ValueError(f"Group name: {name}, not found in Repo Configuration!")
 
     def print_entity(self):
         headers = ["name", "value-type", "description"]
