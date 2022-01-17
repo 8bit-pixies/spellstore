@@ -190,6 +190,86 @@ class FeatureView(BaseModel):
     create_timestamp_column: Optional[str] = None
     rank_column: Optional[str] = None
 
+    def build_subquery_safe(self, engine, snapshot_date=None, entity_list=None):
+        """
+        A "safe" version by SQL verb support which avoids over + partition by
+        """
+        db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+        columns = self.columns.copy()
+        self.rank_column = None
+        if self.entity_column not in columns:
+            columns.append(self.entity_column)
+
+        if self.event_timestamp_column is None:
+            self.columns = columns
+            self.rank_column = None
+            query_builder = db.query(table(self.name, *[column(col) for col in self.columns]))
+        else:
+            if self.event_timestamp_column not in columns:
+                columns.append(self.event_timestamp_column)
+            if self.create_timestamp_column not in columns and self.create_timestamp_column is not None:
+                columns.append(self.create_timestamp_column)
+
+            rank_col = "rnk"
+            while rank_col in columns:
+                rank_col = "r" + rank_col
+            self.columns = columns
+
+            if self.create_timestamp_column is None:
+                subq = (
+                    db.query(
+                        table(self.name, column(self.entity_column)),
+                        func.max(column(self.event_timestamp_column)).label(rank_col),
+                    )
+                    .filter(column(self.event_timestamp_column) <= snapshot_date)
+                    .group_by(column(self.entity_column))
+                )
+                if entity_list is not None:
+                    if type(entity_list) is not list:
+                        entity_list = entity_list.tolist()  # avoid nd-arrays
+                    subq = subq.filter(column(self.entity_column).in_(entity_list))
+                subq = subq.subquery()
+
+                query_builder = db.query(table(self.name, *[column(col) for col in self.columns])).join(
+                    subq,
+                    and_(
+                        getattr(table(self.name, column(self.entity_column)).c, self.entity_column)
+                        == getattr(subq.c, self.entity_column),
+                        getattr(table(self.name, column(self.event_timestamp_column)).c, self.event_timestamp_column)
+                        == getattr(subq.c, rank_col),
+                    ),
+                )
+            else:
+
+                subq = (
+                    db.query(
+                        table(self.name, column(self.entity_column)),
+                        func.max(column(self.event_timestamp_column)).label(rank_col),
+                        func.max(column(self.event_timestamp_column)).label(rank_col + "0"),
+                    )
+                    .filter(column(self.event_timestamp_column) <= snapshot_date)
+                    .group_by(column(self.entity_column))
+                )
+                if entity_list is not None:
+                    if type(entity_list) is not list:
+                        entity_list = entity_list.tolist()  # avoid nd-arrays
+                    subq = subq.filter(column(self.entity_column).in_(entity_list))
+                subq = subq.subquery()
+
+                query_builder = db.query(table(self.name, *[column(col) for col in self.columns])).join(
+                    subq,
+                    and_(
+                        getattr(table(self.name, column(self.entity_column)).c, self.entity_column)
+                        == getattr(subq.c, self.entity_column),
+                        getattr(table(self.name, column(self.event_timestamp_column)).c, self.event_timestamp_column)
+                        == getattr(subq.c, rank_col),
+                        getattr(table(self.name, column(self.create_timestamp_column)).c, self.create_timestamp_column)
+                        == getattr(subq.c, rank_col + "0"),
+                    ),
+                )
+
+        return query_builder.subquery()
+
     def build_subquery(self, engine, snapshot_date=None, entity_list=None):
         db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
         columns = self.columns.copy()
@@ -248,6 +328,7 @@ class FeatureView(BaseModel):
 class FeatureGroup(BaseModel):
     feature_views: List[FeatureView]
     full_join: bool = True
+    use_safe: bool = False
 
     def build_query(self, engine, snapshot_date=None, entity_list=None):
         db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
@@ -260,8 +341,12 @@ class FeatureGroup(BaseModel):
 
         # build subqueries
         for fv in self.feature_views:
-            table_dict[fv.name] = fv.build_subquery(db, snapshot_date, entity_list)
+            if self.use_safe:
+                table_dict[fv.name] = fv.build_subquery_safe(db, snapshot_date, entity_list)
+            else:
+                table_dict[fv.name] = fv.build_subquery(db, snapshot_date, entity_list)
             table_join_info[fv.name] = fv.entity_column
+            print(dir(table_dict[fv.name].c), table_dict[fv.name].c.keys())
             select_cols.extend([getattr(table_dict[fv.name].c, col) for col in fv.columns if col != fv.entity_column])
             select_col_entity.append(getattr(table_dict[fv.name].c, fv.entity_column))
             if is_base_table:
