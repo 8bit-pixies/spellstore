@@ -20,6 +20,7 @@ tqdm = "^4.62.3"
 types-PyYAML = "^6.0.3"
 types-tabulate = "^0.8.5"
 python-dotenv = "^0.19.2"
+mkdocs-material = "^8.1.7"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

@@ -87,7 +87,8 @@ class Group(BaseModel):
 class RepoConfig(BaseModel):
     entities: List[Entity]
     groups: List[Group]
-    engine: Optional[Union[Engine, EngineConfig]]
+    # fix this typing later...
+    engine: Optional[Union[Engine, EngineConfig]]  # type: ignore
 
     class Config:
         arbitrary_types_allowed = True

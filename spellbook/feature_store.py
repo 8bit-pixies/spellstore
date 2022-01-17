@@ -21,10 +21,7 @@ class FeatureStore(object):
         self.engine = repo_config.engine if engine is None else engine
         self.full_join = full_join
 
-    def get_feature_group(self, feature_list: List[str], snapshot_date: Optional[datetime] = None):
-        if snapshot_date is None:
-            snapshot_date = datetime.now()
-
+    def get_feature_group(self, feature_list: List[str]):
         table_col_dict = {}  # type: ignore
         table_ordered = []
         feature_views = []
@@ -53,20 +50,20 @@ class FeatureStore(object):
         limit: Optional[int] = None,
         chunksize=10000,
         force_fetch_all=False,
+        force_append=False,
         verbose=False,
     ):
         if snapshot_date is None:
             snapshot_date = datetime.now()
 
-        feature_group = self.get_feature_group(feature_list, snapshot_date)
-        query = feature_group.build_query(self.engine)
+        feature_group = self.get_feature_group(feature_list)
+        query = feature_group.build_query(self.engine, snapshot_date=snapshot_date)
         output = ""
-        print(str(query.statement))
 
+        header = True if not force_append else False
         if not force_fetch_all:
             # do something like - should add tqdm
-            conn = self.engine.connect().execution_options(stream_results=True)
-            header = True
+            conn = self.engine.connect().execution_options(stream_results=True)  # type: ignore
             for chunk_df in pd.read_sql_query(query.statement, conn, chunksize=chunksize):
                 if header:
                     output = chunk_df.to_markdown(index=False)
@@ -80,8 +77,32 @@ class FeatureStore(object):
             df = pd.read_sql_query(query.statement, self.engine)
             output = df.to_markdown(index=False)
             if output_file is not None and output_file != "":
-                df.to_csv(output_file, model="w", header=True)
+                output_mode = "a" if force_append else "w"
+
+                df.to_csv(output_file, mode=output_mode, header=header)
         return output
+
+    def join(
+        self,
+        entity_df,
+        feature_list: List[str],
+        snapshot_date: Optional[datetime] = None,
+        output_file: Optional[str] = None,
+        limit: Optional[int] = None,
+        chunksize=10000,
+        force_fetch_all=False,
+        force_append=False,
+        verbose=False,
+    ):
+        """
+        If snapshot date is provided, will just filter based on snapshot date + entity list,
+        otherwise will attempt to group by entity_df + event_timestamp, and chunk it down.
+        """
+        if snapshot_date is None:
+            snapshot_date = datetime.now()
+
+        # feature_group = self.get_feature_group(feature_list, snapshot_date)
+        # return feature_group
 
 
 class FeatureView(BaseModel):
@@ -92,7 +113,7 @@ class FeatureView(BaseModel):
     create_timestamp_column: Optional[str] = None
     rank_column: Optional[str] = None
 
-    def build_subquery(self, engine):
+    def build_subquery(self, engine, snapshot_date=None, entity_list=None):
         db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
         columns = self.columns.copy()
         if self.entity_column not in columns:
@@ -101,7 +122,7 @@ class FeatureView(BaseModel):
         if self.event_timestamp_column is None:
             self.columns = columns
             self.rank_column = None
-            return db.query(table(self.name, *[column(col) for col in self.columns])).subquery()
+            query_builder = db.query(table(self.name, *[column(col) for col in self.columns]))
         else:
             if self.event_timestamp_column not in columns:
                 columns.append(self.event_timestamp_column)
@@ -115,14 +136,15 @@ class FeatureView(BaseModel):
             self.rank_column = rank_col
 
             if self.create_timestamp_column is None:
-                return db.query(
+                query_builder = db.query(
                     table(self.name, *[column(col) for col in self.columns]),
                     func.rank()
                     .over(order_by=column(self.event_timestamp_column).desc(), partition_by=self.entity_column)
                     .label(rank_col),
-                ).subquery()
+                ).filter(column(self.event_timestamp_column) <= snapshot_date)
+
             else:
-                return db.query(
+                query_builder = db.query(
                     table(self.name, *[column(col) for col in self.columns]),
                     func.rank()
                     .over(
@@ -132,14 +154,19 @@ class FeatureView(BaseModel):
                         partition_by=self.entity_column,
                     )
                     .label(rank_col),
-                ).subquery()
+                ).filter(column(self.event_timestamp_column) <= snapshot_date)
+
+        if entity_list is not None:
+            query_builder = query_builder.filter(column(self.entity_column).in_(tuple(entity_list)))
+
+        return query_builder.subquery()
 
 
 class FeatureGroup(BaseModel):
     feature_views: List[FeatureView]
     full_join: bool = True
 
-    def build_query(self, engine):
+    def build_query(self, engine, snapshot_date=None, entity_list=None):
         db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
         table_dict = {}
         select_cols = []
@@ -150,7 +177,7 @@ class FeatureGroup(BaseModel):
 
         # build subqueries
         for fv in self.feature_views:
-            table_dict[fv.name] = fv.build_subquery(db)
+            table_dict[fv.name] = fv.build_subquery(db, snapshot_date, entity_list)
             table_join_info[fv.name] = fv.entity_column
             select_cols.extend([getattr(table_dict[fv.name].c, col) for col in fv.columns if col != fv.entity_column])
             select_col_entity.append(getattr(table_dict[fv.name].c, fv.entity_column))
@@ -191,6 +218,8 @@ class FeatureGroup(BaseModel):
                         getattr(table_dict[fv.name].c, fv.rank_column).is_(None),
                     )
                 )
+
+            # ensures properly joined for subsequent queries
             select_col_entity.append(getattr(table_dict[fv.name].c, fv.entity_column))
 
         return base_query

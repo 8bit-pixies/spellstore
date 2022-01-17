@@ -1,4 +1,4 @@
-<h1 align="center">SpellBook</h1>
+<h1 align="center">🪄📗 - SpellBook</h1>
 <p align="center">
     <em>Basic, Barebones Feature store using SQLAlchemy</em>
 </p>
@@ -59,11 +59,14 @@ print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datet
 ## Things to Implement
 
 - [ ] TTL support similar to Feast
-
+- [ ] Testing on variety of databases
+- [ ] Documentation and better usage examples
+- [ ] Benchmarks and performance
+- [ ] Clean up package requirements
 
 # Architecture
 
-Well...the difference between Spellbook with other approaches is there is no data created or stored on disc unless you explicitly tell it to write to disc. We don't create a database containing metadata or keep track of revisions. We assume that is handled elsewhere.
+Well...the difference between Spellbook with other approaches is there is no data created or stored on disc unless you explicitly tell it to write to disc. We don't create a database containing metadata or keep track of revisions. We assume that is handled elsewhere. Metadata is assumed to be stored directly in version control, and we provide `cli` tools to explore the metadata. 
 
 # Why not Feast?
 
