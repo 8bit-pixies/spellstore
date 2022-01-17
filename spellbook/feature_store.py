@@ -144,7 +144,7 @@ class FeatureStore(object):
             return output
 
         # otherwise entity_df is a dataframe, and we have to group by and chunk by event_timestamp
-        for _, group_df in entity_df.groupby([entity_column, event_timestamp_column]):
+        for _, group_df in entity_df.groupby([event_timestamp_column]):
             # refactor this later
             entity_list = list(group_df[entity_column])
             num_splits = (len(entity_list) // 1000) + 1
@@ -346,7 +346,6 @@ class FeatureGroup(BaseModel):
             else:
                 table_dict[fv.name] = fv.build_subquery(db, snapshot_date, entity_list)
             table_join_info[fv.name] = fv.entity_column
-            print(dir(table_dict[fv.name].c), table_dict[fv.name].c.keys())
             select_cols.extend([getattr(table_dict[fv.name].c, col) for col in fv.columns if col != fv.entity_column])
             select_col_entity.append(getattr(table_dict[fv.name].c, fv.entity_column))
             if is_base_table:
