@@ -11,4 +11,4 @@ lint:
 	poetry run python -m mypy spellbook/ tests/
 
 test:
-	poetry run python -m pytest tests/ -vvv
+	poetry run python -m pytest --cov spellbook tests/ -vvv 

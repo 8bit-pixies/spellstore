@@ -18,10 +18,11 @@ from spellbook.base import RepoConfig
 
 
 class FeatureStore(object):
-    def __init__(self, repo_config: RepoConfig, engine: Optional[Engine] = None, full_join=False):
+    def __init__(self, repo_config: RepoConfig, engine: Optional[Engine] = None, full_join=False, use_safe=False):
         self.repo_config = repo_config
         self.engine = repo_config.engine if engine is None else engine
         self.full_join = full_join
+        self.use_safe = use_safe
 
     def get_feature_group(self, feature_list: List[str]):
         table_col_dict = {}  # type: ignore
@@ -42,7 +43,7 @@ class FeatureStore(object):
                 )
             )
 
-        return FeatureGroup(feature_views=feature_views, full_join=self.full_join)
+        return FeatureGroup(feature_views=feature_views, full_join=self.full_join, use_safe=self.use_safe)
 
     def export(
         self,
@@ -154,10 +155,12 @@ class FeatureStore(object):
             for elist in entity_list_splits:
                 sub_entity_df = group_df[group_df[entity_column].isin(elist)]
                 feature_group = self.get_feature_group(feature_list)
-                query = feature_group.build_query(self.engine, snapshot_date=temp_snapshot_date, entity_list=elist)
-                # query = feature_group.build_query(self.engine, snapshot_date=temp_snapshot_date, entity_list=None)
 
-                temp_df = pd.read_sql_query(query.statement, self.engine)
+                if self.use_safe:
+                    temp_df = feature_group.to_df(self.engine, snapshot_date=temp_snapshot_date, entity_list=elist)
+                else:
+                    query = feature_group.build_query(self.engine, snapshot_date=temp_snapshot_date, entity_list=elist)
+                    temp_df = pd.read_sql_query(query.statement, self.engine)
 
                 right_key = feature_group.feature_views[0].entity_column
                 right_suffix = "_y"
@@ -190,7 +193,7 @@ class FeatureView(BaseModel):
     create_timestamp_column: Optional[str] = None
     rank_column: Optional[str] = None
 
-    def build_subquery_safe(self, engine, snapshot_date=None, entity_list=None):
+    def build_subquery_safe(self, engine, snapshot_date=None, entity_list=None, is_subquery=True):
         """
         A "safe" version by SQL verb support which avoids over + partition by
         """
@@ -245,7 +248,7 @@ class FeatureView(BaseModel):
                     db.query(
                         table(self.name, column(self.entity_column)),
                         func.max(column(self.event_timestamp_column)).label(rank_col),
-                        func.max(column(self.event_timestamp_column)).label(rank_col + "0"),
+                        func.max(column(self.create_timestamp_column)).label(rank_col + "0"),
                     )
                     .filter(column(self.event_timestamp_column) <= snapshot_date)
                     .group_by(column(self.entity_column))
@@ -267,10 +270,11 @@ class FeatureView(BaseModel):
                         == getattr(subq.c, rank_col + "0"),
                     ),
                 )
-
+        if not is_subquery:
+            return query_builder
         return query_builder.subquery()
 
-    def build_subquery(self, engine, snapshot_date=None, entity_list=None):
+    def build_subquery(self, engine, snapshot_date=None, entity_list=None, is_subquery=True):
         db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
         columns = self.columns.copy()
         if self.entity_column not in columns:
@@ -322,6 +326,8 @@ class FeatureView(BaseModel):
                 entity_list = entity_list.tolist()  # avoid nd-arrays
             query_builder = query_builder.filter(column(self.entity_column).in_(entity_list))
 
+        if not is_subquery:
+            return query_builder
         return query_builder.subquery()
 
 
@@ -395,3 +401,59 @@ class FeatureGroup(BaseModel):
             select_col_entity.append(getattr(table_dict[fv.name].c, fv.entity_column))
 
         return base_query
+
+    def to_df(self, engine, snapshot_date=None, entity_list=None):
+        """
+        this version builds a dataframe in pandas rather than return query
+        it does not chunk - assume all queries can be done in memory
+        """
+        db = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+        table_dict = {}
+        table_entity = {}
+        is_base_table = True
+        base_entity_column = ""
+
+        # build subqueries
+        for fv in self.feature_views:
+            if self.use_safe:
+                table_dict[fv.name] = pd.read_sql_query(
+                    fv.build_subquery_safe(db, snapshot_date, entity_list, is_subquery=False).statement, engine
+                )
+            else:
+                table_dict[fv.name] = pd.read_sql_query(
+                    fv.build_subquery(db, snapshot_date, entity_list, is_subquery=False).statement, engine
+                )
+
+            table_entity[fv.name] = fv.enetity_column
+
+            if is_base_table:
+                base_entity_column = fv.entity_column
+            is_base_table = False
+
+        # add join/filter conditions
+        is_base_table = True
+        base_table = None
+        for fv in self.feature_views:
+            if base_table is None:
+                base_table = table_dict[fv.name].copy()
+            else:
+                right_suffix = "_y"
+                while any(
+                    [x.endswith(right_suffix) for x in list(base_table.columns) + list(table_dict[fv.name].columns)]
+                ):
+                    right_suffix = "_" + right_suffix
+                entity_column = table_entity[fv.name]
+                base_table = base_table.merge(
+                    table_dict[fv.name],
+                    how="left",
+                    left_on=base_entity_column,
+                    right_on=entity_column,
+                    suffixes=(None, right_suffix),
+                )
+                keep_cols = [x for x in base_table.columns if not x.endswith(right_suffix)]
+                base_table = base_table[keep_cols]
+
+            if fv.rank_column is not None:
+                base_table = base_table[(base_table[fv.rank_column] == 1) | (base_table[fv.rank_column].isna())]
+
+        return base_table

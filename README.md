@@ -63,7 +63,8 @@ print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datet
 - [ ] Documentation and better usage examples
 - [ ] Benchmarks and performance
 - [ ] Clean up package requirements
-- [ ] Require fallback if the language doesn't support `partition` `over`
+- [x] Require fallback if the language doesn't support `partition` `over`
+- [ ] Support feature name aliasing
 
 # Architecture
 
