@@ -16,9 +16,9 @@ from spellbook.base import RepoConfig
 
 
 class FeatureStore(object):
-    def __init__(self, repo_config: RepoConfig, engine: Engine, full_join=False):
+    def __init__(self, repo_config: RepoConfig, engine: Optional[Engine] = None, full_join=False):
         self.repo_config = repo_config
-        self.engine = engine
+        self.engine = repo_config.engine if engine is None else engine
         self.full_join = full_join
 
     def get_feature_group(self, feature_list: List[str], snapshot_date: Optional[datetime] = None):
@@ -48,8 +48,8 @@ class FeatureStore(object):
     def export(
         self,
         feature_list: List[str],
-        output_file: Optional[str] = None,
         snapshot_date: Optional[datetime] = None,
+        output_file: Optional[str] = None,
         limit: Optional[int] = None,
         chunksize=10000,
         force_fetch_all=False,
@@ -61,6 +61,7 @@ class FeatureStore(object):
         feature_group = self.get_feature_group(feature_list, snapshot_date)
         query = feature_group.build_query(self.engine)
         output = ""
+        print(str(query.statement))
 
         if not force_fetch_all:
             # do something like - should add tqdm
@@ -70,7 +71,7 @@ class FeatureStore(object):
                 if header:
                     output = chunk_df.to_markdown(index=False)
 
-                if output_file is not None:
+                if output_file is not None and output_file != "":
                     chunk_df.to_csv(output_file, mode="a", header=header)
                 else:
                     break
@@ -78,7 +79,7 @@ class FeatureStore(object):
         else:
             df = pd.read_sql_query(query.statement, self.engine)
             output = df.to_markdown(index=False)
-            if output_file is not None:
+            if output_file is not None and output_file != "":
                 df.to_csv(output_file, model="w", header=True)
         return output
 

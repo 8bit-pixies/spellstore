@@ -18,24 +18,24 @@ app.add_typer(meta_app, name="meta")
 
 
 @meta_app.command()
-def all(metadata: RepoConfig):
-    metadata = RepoConfig.parse_yaml_file(metadata)
-    typer.echo(metadata.print_meta())
+def all(metadata: str = ""):
+    repo = RepoConfig.parse_yaml_file(metadata)
+    typer.echo(repo.print_meta())
 
 
 @meta_app.command()
-def entity(metadata: RepoConfig):
-    metadata = RepoConfig.parse_yaml_file(metadata)
-    typer.echo(metadata.print_entity())
+def entity(metadata: str = ""):
+    repo = RepoConfig.parse_yaml_file(metadata)
+    typer.echo(repo.print_entity())
 
 
 @meta_app.command()
-def feature(metadata: RepoConfig):
-    metadata = RepoConfig.parse_yaml_file(metadata)
-    typer.echo(metadata.print_feature())
+def feature(metadata: str = ""):
+    repo = RepoConfig.parse_yaml_file(metadata)
+    typer.echo(repo.print_feature())
 
 
 @meta_app.command()
-def group(metadata: RepoConfig):
-    metadata = RepoConfig.parse_yaml_file(metadata)
-    typer.echo(metadata.print_group())
+def group(metadata: str = ""):
+    repo = RepoConfig.parse_yaml_file(metadata)
+    typer.echo(repo.print_group())

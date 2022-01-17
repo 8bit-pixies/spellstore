@@ -1,7 +1,9 @@
-<h1 align="center">OomStore</h1>
+<h1 align="center">SpellBook</h1>
 <p align="center">
     <em>Basic, Barebones Feature store using SQLAlchemy</em>
 </p>
+
+Why deploy any new infrastructure at all? Spellbook attempts to bridge the feature store production lifecycle to day 0 - just install the python library and go!
 
 Status: _design phase_
 
@@ -9,6 +11,10 @@ Goals:
 
 *  Enable a feature store experience without write access using `sqlalchemy`
 *  Define features in YAML
+
+Limitations:
+
+*  Performance is limited to Pandas and SQLAlchemy
 
 # Usage
 
@@ -31,15 +37,29 @@ $ spellbook import --group <feature group> --input-file <input file.csv>
 
 Python API: TBC, should mirror CLI usage
 
+```py
+from spellbook.feature_store import FeatureStore
+from datetime import datetime
+
+feature_store = FeatureStore(repo_config, engine)
+print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datetime.now()))
+```
+
 ## CLI Coverage
 
 - [x] `spellbook get meta all`
 - [x] `spellbook get meta entity`
 - [x] `spellbook get meta feature`
 - [x] `spellbook get meta group`
-- [ ] `spellbook export`  - propose to remove as it requires an implicit knowledge of the database connections?
-- [ ] `spellbook join`  - propose to remove as it requires an implicit knowledge of the database connections?
-- [ ] `spellbook import`
+- [x] `spellbook export`
+- [ ] `spellbook join`
+- [x] `spellbook load`
+
+
+## Things to Implement
+
+- [ ] TTL support similar to Feast
+
 
 # Architecture
 

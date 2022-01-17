@@ -2,12 +2,46 @@
 Handles and parses the metadata files
 """
 
+import os
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Union
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, validator
+from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Engine
 from tabulate import tabulate
+
+
+class EngineConfig(object):
+    def __init__(self, url: str, config: dict):
+        self.url = url
+        self.config = self.load_envvars(config)
+
+    def _fix_envvars(self, nm):
+        if os.path.exists(".env"):
+            load_dotenv()
+        if type(nm) is str:
+            nm = nm.strip()
+            if nm.startswith("${") and nm.endswith("}"):
+                nm = nm[2:-1]
+                nm = os.environ[nm]
+        return nm
+
+    def load_envvars(self, config):
+        config = {k: self._fix_envvars(v) for k, v in config.items()}
+        return config
+
+    @classmethod
+    def parse_obj(cls, v):
+        ignore_keys = ["url", "kind"]
+        url = v["url"]
+        config = {k: v for k, v in v.items() if k not in ignore_keys}
+        return cls(url, config)
+
+    def get_engine(self):
+        return create_engine(self.url, **self.config)
 
 
 class Entity(BaseModel):
@@ -16,7 +50,7 @@ class Entity(BaseModel):
     description: Optional[str]
     kind: str = "entity"
 
-    @validator("value_type", pre=True)
+    @validator("value_type", pre=True, allow_reuse=True)
     def convert_str_type(cls, v):
         if type(v) is str:
             type_mapper = {"str": str, "int": int, "float": float, "datetime": datetime}
@@ -30,7 +64,7 @@ class Feature(BaseModel):
     description: Optional[str]
     kind: str = "feature"
 
-    @validator("value_type", pre=True)
+    @validator("value_type", pre=True, allow_reuse=True)
     def convert_str_type(cls, v):
         if type(v) is str:
             type_mapper = {"str": str, "int": int, "float": float, "datetime": datetime}
@@ -53,19 +87,28 @@ class Group(BaseModel):
 class RepoConfig(BaseModel):
     entities: List[Entity]
     groups: List[Group]
+    engine: Optional[Union[Engine, EngineConfig]]
+
+    class Config:
+        arbitrary_types_allowed = True
 
     @classmethod
     def parse_list(cls, list_obj):
         entities = []
         groups = []
+        engine = None
         for obj in list_obj:
             if type(obj) is Entity:
                 entities.append(obj)
             elif type(obj) is Group:
                 groups.append(obj)
+            elif type(obj) in [Engine]:
+                engine = obj
+            elif type(obj) is EngineConfig:
+                engine = obj.get_engine()
             else:
                 raise ValueError(f"Expected Entity or Group object, got: {type(obj)}")
-        return cls(entities=entities, groups=groups)
+        return cls(entities=entities, groups=groups, engine=engine)
 
     @classmethod
     def parse_yaml(cls, config):
@@ -76,6 +119,8 @@ class RepoConfig(BaseModel):
                 meta_list.append(Entity.parse_obj(meta_obj))
             elif meta_obj["kind"] == "group":
                 meta_list.append(Group.parse_obj(meta_obj))
+            elif meta_obj["kind"] == "engine":
+                meta_list.append(EngineConfig.parse_obj(meta_obj))
             else:
                 raise Exception("Unable to parse Configuration...")
         return cls.parse_list(meta_list)

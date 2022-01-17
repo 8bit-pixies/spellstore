@@ -1,17 +1,14 @@
 ---
 kind: entity
-name: user
+name: a
 value_type: str
     
 ---
 kind: group
 name: test1
-entity: user
+entity: a
+event_timestamp_column: b
 features:
-  - name: a
-    value_type: int
-  - name: b
-    value_type: float
   - name: c
     value_type : str
 
@@ -19,11 +16,12 @@ features:
 ---
 kind: group
 name: test2
-entity: user
+entity: a
+event_timestamp_column: d
 features:
-  - name: a
-    value_type: int
-  - name: d
-    value_type: float
   - name: e
     value_type : str
+
+---
+kind: engine
+url: "sqlite:///test.db"
