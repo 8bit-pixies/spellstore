@@ -14,7 +14,7 @@ from sqlalchemy import and_, column, func, or_, table
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from spellbook.base import Entity, RepoConfig
+from spellbook.base import RepoConfig
 
 
 class FeatureStore(object):
@@ -105,7 +105,9 @@ class FeatureStore(object):
         """
         # feature_group = self.get_feature_group(feature_list, snapshot_date)
         # return feature_group
-        output = []
+        if entity_df.shape[0] <= 1000:
+            force_fetch_all = True
+        output: List[pd.DataFrame] = []
         if snapshot_date is not None or event_timestamp_column is None:
             # refactor this later
             entity_list = list(entity_df[entity_column])
@@ -129,7 +131,7 @@ class FeatureStore(object):
                 keep_cols = [x for x in temp_df.columns if not x.endswith(right_suffix)]
                 temp_df = temp_df[keep_cols]
 
-                if force_fetch_all:
+                if force_fetch_all or len(output) == 0:
                     output.append(temp_df.copy())
                 elif output_file is None:
                     raise ValueError("TODO fill this in, either you force fetch, or provide somewhere to spool")

@@ -26,13 +26,13 @@ $ spellbook get meta entity --metadata metadata.yml
 $ spellbook get meta feature --metadata metadata.yml
 $ spellbook get meta group --metadata metadata.yml
 $ spellbook export --feature <list of features> --snapshot-date <date/datetime> --output <(optional)>
-$ spellbook join --feature <list of features> --input-file <labels.csv> --output <(optional)>
+$ spellbook join <labels.csv> --entity-column <column:str> --features <list of features> --output <(optional)>
 ```
 
 Convenience utilities - this is a wrapper around `pandas` to write to the underlying database, but not needed. It is provided so that the user never needs to leave CLI.
 
 ```console
-$ spellbook import --group <feature group> --input-file <input file.csv>
+$ spellbook load <input file.csv> --group <feature group>
 ```
 
 Python API: TBC, should mirror CLI usage
@@ -52,7 +52,7 @@ print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datet
 - [x] `spellbook get meta feature`
 - [x] `spellbook get meta group`
 - [x] `spellbook export`
-- [ ] `spellbook join`
+- [x] `spellbook join`
 - [x] `spellbook load`
 
 
@@ -63,6 +63,7 @@ print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datet
 - [ ] Documentation and better usage examples
 - [ ] Benchmarks and performance
 - [ ] Clean up package requirements
+- [ ] Require fallback if the language doesn't support `partition` `over`
 
 # Architecture
 
