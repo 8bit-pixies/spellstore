@@ -3,16 +3,18 @@ Exports Historical Feature Group to file.
 """
 
 
+import os.path
 from datetime import datetime
 from typing import List, Optional
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 from sqlalchemy import and_, column, func, or_, table
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from spellbook.base import RepoConfig
+from spellbook.base import Entity, RepoConfig
 
 
 class FeatureStore(object):
@@ -47,6 +49,7 @@ class FeatureStore(object):
         feature_list: List[str],
         snapshot_date: Optional[datetime] = None,
         output_file: Optional[str] = None,
+        entity_list=None,
         limit: Optional[int] = None,
         chunksize=10000,
         force_fetch_all=False,
@@ -57,7 +60,7 @@ class FeatureStore(object):
             snapshot_date = datetime.now()
 
         feature_group = self.get_feature_group(feature_list)
-        query = feature_group.build_query(self.engine, snapshot_date=snapshot_date)
+        query = feature_group.build_query(self.engine, snapshot_date=snapshot_date, entity_list=entity_list)
         output = ""
 
         header = True if not force_append else False
@@ -85,7 +88,9 @@ class FeatureStore(object):
     def join(
         self,
         entity_df,
-        feature_list: List[str],
+        entity_column="",
+        event_timestamp_column="",
+        feature_list: List[str] = [],
         snapshot_date: Optional[datetime] = None,
         output_file: Optional[str] = None,
         limit: Optional[int] = None,
@@ -98,11 +103,81 @@ class FeatureStore(object):
         If snapshot date is provided, will just filter based on snapshot date + entity list,
         otherwise will attempt to group by entity_df + event_timestamp, and chunk it down.
         """
-        if snapshot_date is None:
-            snapshot_date = datetime.now()
-
         # feature_group = self.get_feature_group(feature_list, snapshot_date)
         # return feature_group
+        output = []
+        if snapshot_date is not None or event_timestamp_column is None:
+            # refactor this later
+            entity_list = list(entity_df[entity_column])
+
+            num_splits = (len(entity_list) // 999) + 1
+            entity_list_splits = np.array_split(entity_list, num_splits)
+
+            for elist in entity_list_splits:
+                sub_entity_df = entity_df[entity_df[entity_column].isin(elist)]
+                feature_group = self.get_feature_group(feature_list)
+                query = feature_group.build_query(self.engine, snapshot_date=snapshot_date, entity_list=elist)
+
+                temp_df = pd.read_sql_query(query.statement, self.engine)
+                right_key = feature_group.feature_views[0].entity_column
+                right_suffix = "_y"
+                while any([x.endswith(right_suffix) for x in list(temp_df.columns) + list(sub_entity_df)]):
+                    right_suffix = "_" + right_suffix
+                temp_df = sub_entity_df.merge(
+                    temp_df, how="left", left_on=entity_column, right_on=right_key, suffixes=(None, right_suffix)
+                )
+                keep_cols = [x for x in temp_df.columns if not x.endswith(right_suffix)]
+                temp_df = temp_df[keep_cols]
+
+                if force_fetch_all:
+                    output.append(temp_df.copy())
+                elif output_file is None:
+                    raise ValueError("TODO fill this in, either you force fetch, or provide somewhere to spool")
+                else:
+                    header = not os.path.exists(output_file)
+                    temp_df.to_csv(output_file, mode="a", header=header)
+
+            if len(output) > 0:
+                output = pd.concat(output)
+            return output
+
+        # otherwise entity_df is a dataframe, and we have to group by and chunk by event_timestamp
+        for _, group_df in entity_df.groupby([entity_column, event_timestamp_column]):
+            # refactor this later
+            entity_list = list(group_df[entity_column])
+            num_splits = (len(entity_list) // 1000) + 1
+            entity_list_splits = np.array_split(entity_list, num_splits)
+            temp_snapshot_date = group_df[event_timestamp_column].tolist()[0]
+
+            for elist in entity_list_splits:
+                sub_entity_df = group_df[group_df[entity_column].isin(elist)]
+                feature_group = self.get_feature_group(feature_list)
+                query = feature_group.build_query(self.engine, snapshot_date=temp_snapshot_date, entity_list=elist)
+                # query = feature_group.build_query(self.engine, snapshot_date=temp_snapshot_date, entity_list=None)
+
+                temp_df = pd.read_sql_query(query.statement, self.engine)
+
+                right_key = feature_group.feature_views[0].entity_column
+                right_suffix = "_y"
+                while any([x.endswith(right_suffix) for x in list(temp_df.columns) + list(sub_entity_df)]):
+                    right_suffix = "_" + right_suffix
+                temp_df = sub_entity_df.merge(
+                    temp_df, how="left", left_on=entity_column, right_on=right_key, suffixes=(None, right_suffix)
+                )
+                keep_cols = [x for x in temp_df.columns if not x.endswith(right_suffix)]
+                temp_df = temp_df[keep_cols]
+
+                if force_fetch_all:
+                    output.append(temp_df.copy())
+                elif output_file is None:
+                    raise ValueError("TODO fill this in, either you force fetch, or provide somewhere to spool")
+                else:
+                    header = not os.path.exists(output_file)
+                    temp_df.to_csv(output_file, mode="a", header=header)
+
+        if len(output) > 0:
+            output = pd.concat(output)
+        return output
 
 
 class FeatureView(BaseModel):
@@ -119,6 +194,10 @@ class FeatureView(BaseModel):
         if self.entity_column not in columns:
             columns.append(self.entity_column)
 
+        # if self.event_timestamp_column is None and entity_list is None:
+        #     self.columns = columns
+        #     self.rank_column = None
+        #     query_builder = db.query(table(self.name, *[column(col) for col in self.columns]))
         if self.event_timestamp_column is None:
             self.columns = columns
             self.rank_column = None
@@ -157,7 +236,9 @@ class FeatureView(BaseModel):
                 ).filter(column(self.event_timestamp_column) <= snapshot_date)
 
         if entity_list is not None:
-            query_builder = query_builder.filter(column(self.entity_column).in_(tuple(entity_list)))
+            if type(entity_list) is not list:
+                entity_list = entity_list.tolist()  # avoid nd-arrays
+            query_builder = query_builder.filter(column(self.entity_column).in_(entity_list))
 
         return query_builder.subquery()
 
@@ -186,7 +267,12 @@ class FeatureGroup(BaseModel):
             is_base_table = False
 
         # build id column via coalesce
-        select_cols = [func.coalesce(*select_col_entity).label(base_entity_column)] + select_cols
+        if len(select_col_entity) > 1:
+            select_cols = [func.coalesce(*select_col_entity).label(base_entity_column)] + select_cols
+        else:
+            select_cols = [
+                getattr(table_dict[self.feature_views[0].name].c, self.feature_views[0].entity_column)
+            ] + select_cols
         base_query = db.query(*select_cols)
 
         # add join and filter/rank conditions
