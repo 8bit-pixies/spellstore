@@ -66,6 +66,15 @@ print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datet
 - [x] Require fallback if the language doesn't support `partition` `over`
 - [ ] Support feature name aliasing
 
+## Tech Debt
+
+A lot of the interfaces aren't cleanly separated. Need to separate:
+
+*  things which build queries (these should be functional) - should not have branching logic
+*  things which process data (these should be imperative) - you can have branching logic
+
+Get rid of copy+paste code (theres multiple instances of it)
+
 # Architecture
 
 Well...the difference between Spellbook with other approaches is there is no data created or stored on disc unless you explicitly tell it to write to disc. We don't create a database containing metadata or keep track of revisions. We assume that is handled elsewhere. Metadata is assumed to be stored directly in version control, and we provide `cli` tools to explore the metadata. 
