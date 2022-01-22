@@ -4,8 +4,8 @@ Exports Historical Feature Group to file.
 
 
 import os.path
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from spellbook.base import RepoConfig
+from spellbook.util import infer_ttl_field
 
 
 class FeatureStore(object):
@@ -191,6 +192,7 @@ class FeatureView(BaseModel):
     entity_column: str = ""
     event_timestamp_column: Optional[str] = None
     create_timestamp_column: Optional[str] = None
+    ttl: Optional[Union[int, float, timedelta]] = None
     rank_column: Optional[str] = None
 
     def build_subquery_safe(self, engine, snapshot_date=None, entity_list=None, is_subquery=True):
@@ -219,14 +221,15 @@ class FeatureView(BaseModel):
             self.columns = columns
 
             if self.create_timestamp_column is None:
-                subq = (
-                    db.query(
-                        table(self.name, column(self.entity_column)),
-                        func.max(column(self.event_timestamp_column)).label(rank_col),
-                    )
-                    .filter(column(self.event_timestamp_column) <= snapshot_date)
-                    .group_by(column(self.entity_column))
-                )
+                subq = db.query(
+                    table(self.name, column(self.entity_column)),
+                    func.max(column(self.event_timestamp_column)).label(rank_col),
+                ).filter(column(self.event_timestamp_column) <= snapshot_date)
+                ttl_date = infer_ttl_field(snapshot_date, self.ttl)
+                if ttl_date is not None:
+                    subq = subq.filter(column(self.event_timestamp_column) >= ttl_date)
+
+                subq = subq.group_by(column(self.entity_column))
                 if entity_list is not None:
                     if type(entity_list) is not list:
                         entity_list = entity_list.tolist()  # avoid nd-arrays
@@ -244,15 +247,15 @@ class FeatureView(BaseModel):
                 )
             else:
 
-                subq = (
-                    db.query(
-                        table(self.name, column(self.entity_column)),
-                        func.max(column(self.event_timestamp_column)).label(rank_col),
-                        func.max(column(self.create_timestamp_column)).label(rank_col + "0"),
-                    )
-                    .filter(column(self.event_timestamp_column) <= snapshot_date)
-                    .group_by(column(self.entity_column))
-                )
+                subq = db.query(
+                    table(self.name, column(self.entity_column)),
+                    func.max(column(self.event_timestamp_column)).label(rank_col),
+                    func.max(column(self.create_timestamp_column)).label(rank_col + "0"),
+                ).filter(column(self.event_timestamp_column) <= snapshot_date)
+                ttl_date = infer_ttl_field(snapshot_date, self.ttl)
+                if ttl_date is not None:
+                    subq = subq.filter(column(self.event_timestamp_column) >= ttl_date)
+                subq = subq.group_by(column(self.entity_column))
                 if entity_list is not None:
                     if type(entity_list) is not list:
                         entity_list = entity_list.tolist()  # avoid nd-arrays
@@ -307,6 +310,9 @@ class FeatureView(BaseModel):
                     .over(order_by=column(self.event_timestamp_column).desc(), partition_by=self.entity_column)
                     .label(rank_col),
                 ).filter(column(self.event_timestamp_column) <= snapshot_date)
+                ttl_date = infer_ttl_field(snapshot_date, self.ttl)
+                if ttl_date is not None:
+                    query_builder = query_builder.filter(column(self.event_timestamp_column) >= ttl_date)
 
             else:
                 query_builder = db.query(
@@ -320,6 +326,9 @@ class FeatureView(BaseModel):
                     )
                     .label(rank_col),
                 ).filter(column(self.event_timestamp_column) <= snapshot_date)
+                ttl_date = infer_ttl_field(snapshot_date, self.ttl)
+                if ttl_date is not None:
+                    query_builder = query_builder.filter(column(self.event_timestamp_column) >= ttl_date)
 
         if entity_list is not None:
             if type(entity_list) is not list:
