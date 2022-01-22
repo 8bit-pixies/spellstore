@@ -58,7 +58,7 @@ print(feature_store.export(["table1.feat1", "table1.feat2"], snapshot_date=datet
 
 ## Things to Implement
 
-- [ ] TTL support similar to Feast
+- [x] TTL support similar to Feast (untested)
 - [ ] Testing on variety of databases
 - [ ] Documentation and better usage examples
 - [ ] Benchmarks and performance
