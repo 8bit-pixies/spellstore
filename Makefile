@@ -1,14 +1,14 @@
 .PHONY: format
 
 format:
-	poetry run python -m isort spellbook/ tests/
-	poetry run python -m black spellbook tests
+	poetry run python -m isort spellstore/ tests/
+	poetry run python -m black spellstore tests
 
 lint:
-	poetry run python -m flake8 spellbook/ tests/
-	poetry run python -m isort spellbook/ tests/ --check-only
-	poetry run python -m black --check spellbook/ tests/
-	poetry run python -m mypy spellbook/ tests/
+	poetry run python -m flake8 spellstore/ tests/
+	poetry run python -m isort spellstore/ tests/ --check-only
+	poetry run python -m black --check spellstore/ tests/
+	poetry run python -m mypy spellstore/ tests/
 
 test:
-	poetry run python -m pytest --cov spellbook tests/ -vvv 
+	poetry run python -m pytest --cov spellstore tests/ -vvv 

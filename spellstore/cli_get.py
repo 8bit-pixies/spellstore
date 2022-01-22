@@ -2,7 +2,7 @@
 Usage:
 
 ```console
-python -m spellbook.cli get meta entity --config config.yml
+python -m spellstore.cli get meta entity --config config.yml
 
 ```
 
@@ -10,7 +10,7 @@ python -m spellbook.cli get meta entity --config config.yml
 
 import typer
 
-from spellbook.base import RepoConfig
+from spellstore.base import RepoConfig
 
 app = typer.Typer()
 meta_app = typer.Typer()

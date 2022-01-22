@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "spellbook"
+name = "spellstore"
 version = "0.1.0"
 description = ""
 authors = ["CS <2498638+charliec443@users.noreply.github.com>"]

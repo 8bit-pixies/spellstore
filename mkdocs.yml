@@ -1,9 +1,9 @@
-site_name: Spellbook
+site_name: Spellstore
 site_description: "A SQLAlchemy centric Feature Store"
 site_author: "charliec443"
 docs_dir: docs/
-repo_name: "charliec443/spellbook"
-repo_url: "https://github.com/charliec443/spellbook"
+repo_name: "charliec443/spellstore"
+repo_url: "https://github.com/charliec443/spellstore"
 theme:
   name: "material"
 
